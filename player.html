@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300a1d6'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif'>百</text></svg>">
+<title>百通在线 · 课程播放器</title>
+<link rel="stylesheet" href="https://g.alicdn.com/de/prismplayer/2.9.12/skins/default/aliplayer-min.css" media="print" onload="this.media='all'">
+<style>
+  :root{
+    --blue:#00a1d6; --pink:#fb7299; --bg:#f4f5f7; --card:#fff;
+    --text:#212121; --sub:#9499a0; --line:#e5e9ef; --hover:#f1f2f3;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;}
+  header{height:56px;background:var(--card);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:var(--blue);white-space:nowrap}
+  .logo .dot{width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px}
+  .course-picker{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  select,input{height:34px;border:1px solid var(--line);border-radius:4px;background:#fff;
+    padding:0 10px;font-size:13px;color:var(--text);outline:none}
+  select:focus,input:focus{border-color:var(--blue)}
+  select{min-width:240px;max-width:420px}
+  input{width:104px}
+  button{height:34px;border:0;border-radius:4px;background:var(--blue);color:#fff;
+    padding:0 14px;font-size:13px;cursor:pointer;white-space:nowrap}
+  button:hover{background:#00b5e5}
+  button.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+  button.ghost:hover{background:#e3f6fc}
+  button:disabled{opacity:.6;cursor:default}
+  .meta{color:var(--sub);font-size:12px;white-space:nowrap}
+  main{display:flex;gap:12px;padding:12px 20px;align-items:flex-start;height:calc(100vh - 56px)}
+  .player-col{flex:1;min-width:0}
+  .player-card{background:#000;border-radius:6px;overflow:hidden;position:relative;aspect-ratio:16/9}
+  .player-card video,.player-card .prism-player{width:100%;height:100%;display:block}
+  /* 播放遮罩：解决浏览器自动播放被拦截 */
+  #playOverlay{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;
+    align-items:center;justify-content:center;background:rgba(0,0,0,.55);color:#fff;
+    cursor:pointer;z-index:9999;text-align:center;padding:20px}
+  #playOverlay .big{width:76px;height:76px;border-radius:50%;background:var(--blue);
+    display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  #playOverlay .tip{font-size:15px;font-weight:600}
+  #playOverlay .sub{font-size:12px;color:#cfd3d8}
+  #playOverlay.hidden{display:none}
+  .info-card{background:var(--card);border-radius:6px;margin-top:10px;padding:14px 16px}
+  .info-card h1{margin:0 0 8px;font-size:18px;line-height:1.4}
+  .info-card .row{display:flex;flex-wrap:wrap;gap:16px;color:var(--sub);font-size:12px;margin-top:8px}
+  .info-card .row b{color:var(--text);font-weight:600}
+  .ctrl{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .ep-col{width:340px;flex:0 0 340px;background:var(--card);border-radius:6px;
+    display:flex;flex-direction:column;height:calc(100vh - 80px);overflow:hidden}
+  .ep-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;justify-content:space-between;gap:8px}
+  .ep-head .t{font-size:15px;font-weight:600}
+  .ep-head .n{color:var(--sub);font-size:12px}
+  .ep-search{padding:8px 10px;border-bottom:1px solid var(--line)}
+  .ep-search input{width:100%}
+  .ep-list{overflow-y:auto;flex:1;padding:6px}
+  .stage{font-size:12px;color:var(--sub);padding:10px 8px 4px;font-weight:600}
+  .ep{display:flex;gap:8px;padding:8px;border-radius:4px;cursor:pointer;align-items:flex-start}
+  .ep:hover{background:var(--hover)}
+  .ep.active{background:#e3f6fc}
+  .ep .no{flex:0 0 26px;height:26px;border-radius:4px;background:#f1f2f3;color:var(--sub);
+    display:flex;align-items:center;justify-content:center;font-size:12px}
+  .ep.active .no{background:var(--blue);color:#fff}
+  .ep .body{min-width:0;flex:1}
+  .ep .nm{font-size:13px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .ep.active .nm{color:var(--blue);font-weight:600}
+  .ep .dur{font-size:11px;color:var(--sub);margin-top:3px}
+  .empty{padding:30px;text-align:center;color:var(--sub);font-size:13px}
+  .loading{padding:40px;text-align:center;color:var(--sub);font-size:13px}
+  .err{color:#ff6b6b}
+  .warn{color:#e6a23c}
+  @media (max-width:900px){
+    main{flex-direction:column;height:auto}
+    .ep-col{width:100%;flex:auto;height:60vh}
+    select{min-width:0;flex:1}
+  }
+</style>
+</head>
+<body>
+<div id="boot" style="position:fixed;inset:0;background:#f4f5f7;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;z-index:99999;color:#9499a0;font-size:14px">
+  <div style="width:34px;height:34px;border:3px solid #e5e9ef;border-top-color:#00a1d6;border-radius:50%;animation:btspin 1s linear infinite"></div>
+  <div>正在加载播放器…</div>
+</div>
+<style>@keyframes btspin{to{transform:rotate(360deg)}}</style>
+<script>window.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('boot');if(b)b.style.display='none';});</script>
+<header>
+  <div class="logo"><span class="dot">百</span>百通在线 · 课程播放器</div>
+  <div class="course-picker">
+    <select id="courseSelect"></select>
+    <input id="courseIdInput" placeholder="课程ID" list="courseOptions">
+    <datalist id="courseOptions"></datalist>
+    <button id="loadBtn">加载课程</button>
+    <button class="ghost" id="reloadBtn">刷新</button>
+    <button class="ghost" id="shuffleBtn">随机</button>
+  </div>
+  <div class="meta" id="headerMeta">—</div>
+</header>
+
+<main>
+  <div class="player-col">
+    <div class="player-card" id="playerCard">
+      <div class="loading" id="playerPlaceholder">选择右侧集数开始播放</div>
+      <div id="playOverlay" class="hidden">
+        <div class="big">▶</div>
+        <div class="tip" id="overlayTip">点击播放</div>
+        <div class="sub" id="overlaySub">浏览器可能拦截了自动播放</div>
+      </div>
+    </div>
+    <div class="info-card">
+      <h1 id="videoTitle">未选择视频</h1>
+      <div class="row">
+        <span>课程：<b id="metaCourse">—</b></span>
+        <span>课时：<b id="metaVideo">—</b></span>
+        <span>时长：<b id="metaDur">—</b></span>
+        <span>播放源：<b id="metaSrc">—</b></span>
+      </div>
+      <div class="ctrl">
+        <button class="ghost" id="prevBtn">上一集</button>
+        <button class="ghost" id="nextBtn">下一集</button>
+        <button class="ghost" id="playBtn">播放 / 暂停</button>
+        <button class="ghost" id="copyBtn">复制直链</button>
+        <button class="ghost" id="handoutBtn">讲义</button>
+        <button class="ghost" id="exportBtn">导出全部直链</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="ep-col">
+    <div class="ep-head">
+      <span class="t">选集</span>
+      <span class="n" id="epCount">—</span>
+    </div>
+    <div class="ep-search"><input id="epSearch" placeholder="搜索课时名…"></div>
+    <div class="ep-list" id="epList"><div class="empty">先加载课程</div></div>
+  </aside>
+</main>
+
+<script>
+// Aliplayer loads asynchronously (avoids blocking first paint on slow CDN)
+window.__aliplayerReady = new Promise(function (resolve) {
+  var s = document.createElement('script');
+  s.src = 'https://g.alicdn.com/de/prismplayer/2.9.12/aliplayer-min.js';
+  s.async = true;
+  s.onload = function () { resolve(true); };
+  s.onerror = function () { resolve(false); };
+  document.head.appendChild(s);
+});
+
+const API = "https://api.zhuokao360.com";
+const HDR = { "APP-TYPE": "2" };
+const LS_KEY = "bt_player_progress_v1";
+
+const COURSES = [
+  { id: 88,  name: "军队文职 · 公共科目（通识+岗位能力）" },
+  { id: 568, name: "军队文职 · 公共科目（导学+基础+岗位）" },
+  { id: 144, name: "军队文职 · 行测+政治理论" },
+  { id: 145, name: "军队文职 · 申论" },
+  { id: 76,  name: "军队文职 · 综合知识（公基）" },
+  { id: 74,  name: "军队文职 · 行测（言语/数量/判断/资料/常识）" },
+  { id: 514, name: "百通试听课" },
+];
+
+const $ = id => document.getElementById(id);
+let courseCache = {};
+let flatList = [];
+let currentCourseId = null;
+let currentIndex = -1;
+let aliplayer = null;
+let nativeVideo = null;
+let lastDirectUrl = "";
+let lastHandoutUrl = "";
+let playTimer = null;
+
+// ---------- 工具 ----------
+async function api(path, params, timeoutMs) {
+  const qs = new URLSearchParams(params || {}).toString();
+  const url = API + path + (qs ? "?" + qs : "");
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs || 20000);
+  try {
+    const r = await fetch(url, { headers: HDR, signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+function fmtDur(sec) {
+  if (!sec && sec !== 0) return "—";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
+           : `${m}:${String(s).padStart(2,"0")}`;
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g,
+    c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function saveProgress(courseId, idx) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    all[courseId] = idx;
+    localStorage.setItem(LS_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+function loadProgress(courseId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    return all[courseId];
+  } catch (e) { return undefined; }
+}
+function isPlaying() {
+  // 优先看播放器内部 <video> 的真实状态（Safari 上 Aliplayer 的 status 可能误报）
+  const v = document.querySelector('#playerCard video');
+  if (v) return !v.paused && !v.ended && v.readyState >= 2;
+  if (aliplayer) { try { return aliplayer.getStatus() === "playing"; } catch (e) { return false; } }
+  if (nativeVideo) { return !nativeVideo.paused && !nativeVideo.ended; }
+  return false;
+}
+function showOverlay(tip, sub) {
+  $("overlayTip").textContent = tip || "点击播放";
+  $("overlaySub").textContent = sub || "浏览器可能拦截了自动播放";
+  $("playOverlay").classList.remove("hidden");
+}
+function hideOverlay() { $("playOverlay").classList.add("hidden"); }
+function startPlayback() {
+  hideOverlay();
+  if (aliplayer) { try { aliplayer.play(); } catch (e) {} }
+  if (nativeVideo) { nativeVideo.muted = false; nativeVideo.play().catch(() => {}); }
+  // 兜底：直接驱动播放器内部的 <video>
+  const inner = document.querySelector('#playerCard video');
+  if (inner) { inner.muted = false; inner.play().catch(() => {}); }
+}
+$("playOverlay").addEventListener("click", startPlayback);
+
+// ---------- 课程结构 ----------
+async function fetchCourseStructure(courseId) {
+  if (courseCache[courseId]) return courseCache[courseId];
+  const j = await api("/courseStage/findCourseStageYear", { courseId }, 25000);
+  if (j.code !== 200 || !j.data || !j.data[0] || !j.data[0].courseStageInfoRes) {
+    throw new Error(j.msg || "课程结构为空");
+  }
+  const stages = [];
+  for (const st of j.data[0].courseStageInfoRes) {
+    const videos = (st.lists || []).map(v => ({
+      videoId: v.videoId,
+      name: v.name || v.videoName || ("课时 " + v.videoId),
+      duration: v.videoDuration,
+      handoutUrl: v.videoHandoutUrl || null,
+      stageName: st.stageName,
+    }));
+    if (videos.length) stages.push({ name: st.stageName || "默认章节", videos });
+  }
+  courseCache[courseId] = { stages };
+  return courseCache[courseId];
+}
+
+function flatten(stages) {
+  const out = [];
+  stages.forEach((st, si) => st.videos.forEach((v, vi) => {
+    out.push({ ...v, stageIndex: si, videoIndex: vi, no: out.length + 1 });
+  }));
+  return out;
+}
+
+// ---------- 渲染选集 ----------
+function renderList() {
+  const q = $("epSearch").value.trim().toLowerCase();
+  const box = $("epList");
+  box.innerHTML = "";
+  let lastStage = null;
+  let shown = 0;
+  flatList.forEach((v, i) => {
+    if (q && !v.name.toLowerCase().includes(q) && !(v.stageName||"").toLowerCase().includes(q)) return;
+    if (v.stageName !== lastStage) {
+      const d = document.createElement("div");
+      d.className = "stage";
+      d.textContent = v.stageName || "默认章节";
+      box.appendChild(d);
+      lastStage = v.stageName;
+    }
+    const el = document.createElement("div");
+    el.className = "ep" + (i === currentIndex ? " active" : "");
+    el.dataset.idx = i;
+    el.innerHTML = `<div class="no">${v.no}</div>
+      <div class="body"><div class="nm">${esc(v.name)}</div>
+      <div class="dur">${fmtDur(v.duration)}</div></div>`;
+    el.onclick = () => playIndex(i);
+    box.appendChild(el);
+    shown++;
+  });
+  if (!shown) box.innerHTML = '<div class="empty">没有匹配的课时</div>';
+  $("epCount").textContent = `${flatList.length} 课时`;
+}
+
+// ---------- 播放 ----------
+async function playIndex(i) {
+  if (i < 0 || i >= flatList.length) return;
+  currentIndex = i;
+  const v = flatList[i];
+  saveProgress(currentCourseId, i);
+  renderList();
+  const el = document.querySelector(`.ep[data-idx="${i}"]`);
+  if (el) el.scrollIntoView({ block: "nearest" });
+
+  $("videoTitle").textContent = v.name;
+  $("metaCourse").textContent = currentCourseId;
+  $("metaVideo").textContent = "第 " + v.no + " 课时";
+  $("metaDur").textContent = fmtDur(v.duration);
+  $("metaSrc").textContent = "加载中…";
+  lastDirectUrl = ""; lastHandoutUrl = v.handoutUrl || "";
+  clearTimeout(playTimer);
+  showOverlay("点击播放", v.name);
+
+  try {
+    destroyPlayer();
+    const d = await api("/video/getPcDetail", { videoId: v.videoId }, 25000);
+    if (d.code !== 200 || !d.data) throw new Error(d.msg || "视频详情获取失败");
+    const info = d.data;
+    const mp4 = info.urlHd || info.urlSd || info.urlLd || "";
+    if (mp4) {
+      lastDirectUrl = mp4;
+      $("metaSrc").textContent = "MP4 直链（videoType=" + (info.videoType ?? "?") + "）";
+      playMp4(mp4, v);
+    } else {
+      $("metaSrc").textContent = "阿里云 VOD（videoType=" + (info.videoType ?? "?") + "）";
+      const p = await api("/videoPlus/getPlayInfo", { videoId: v.videoId, channelFlag: 1, resourcesFlag: 1 }, 25000);
+      if (p.code !== 200 || !p.data || !p.data.id || !p.data.auth) throw new Error(p.msg || "播放凭证获取失败");
+      playVod(p.data.id, p.data.auth, v);
+    }
+  } catch (e) {
+    clearTimeout(playTimer);
+    $("playOverlay").classList.add("hidden");
+    const ph = $("playerPlaceholder");
+    if (ph) {
+      ph.style.display = "flex";
+      ph.innerHTML = '<span class="err">播放失败：' + esc(e.message) +
+        '</span><div style="margin-top:10px"><button class="ghost" onclick="loadCourse(currentCourseId)">重试</button></div>';
+    }
+    $("metaSrc").textContent = "失败";
+  }
+}
+
+function destroyPlayer() {
+  if (aliplayer) { try { aliplayer.dispose(); } catch (e) {} aliplayer = null; }
+  if (nativeVideo) { try { nativeVideo.pause(); nativeVideo.src = ""; } catch (e) {} nativeVideo = null; }
+  const card = $("playerCard");
+  Array.from(card.querySelectorAll("video, #aliPlayerHolder")).forEach(n => n.remove());
+  const ph = $("playerPlaceholder");
+  if (ph) ph.style.display = "none";
+}
+
+function watchAutoplay() {
+  clearTimeout(playTimer);
+  playTimer = setTimeout(() => {
+    if (!isPlaying()) showOverlay("点击播放", $("videoTitle").textContent);
+    else hideOverlay();
+  }, 2500);
+  // 长等兜底：8 秒还没起来就明确提示
+  setTimeout(() => {
+    if (!isPlaying()) {
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      showOverlay("点这里播放", isIOS ? "iOS 仍转圈？可能系统版本低于 17.1，或换个网络试试" : "仍未播放？点击重试");
+    }
+  }, 8000);
+}
+
+function playMp4(url, v) {
+  const card = $("playerCard");
+  const vid = document.createElement("video");
+  vid.controls = true;
+  vid.autoplay = true;
+  vid.muted = true;            // 静音自动播放，浏览器允许
+  vid.playsInline = true;
+  vid.style.width = "100%";
+  vid.style.height = "100%";
+  vid.src = url;
+  card.insertBefore(vid, $("playOverlay"));
+  nativeVideo = vid;
+  vid.onplay = () => { nativeVideo.muted = false; hideOverlay(); };
+  vid.onended = () => { if (confirm("播放完毕，是否下一集？")) playIndex(currentIndex + 1); };
+  vid.play().catch(() => { showOverlay("点击播放", v.name); });
+  watchAutoplay();
+}
+
+async function playVod(vid, auth, v) {
+  showOverlay("加载播放器…", v.name);
+  let ok = false;
+  try { ok = await window.__aliplayerReady; } catch (e) { ok = false; }
+  if (!ok || typeof Aliplayer === "undefined") {
+    showOverlay("播放器加载失败", "Aliplayer CDN 未加载，请检查网络后刷新");
+    return;
+  }
+  const card = $("playerCard");
+  const holder = document.createElement("div");
+  holder.id = "aliPlayerHolder";
+  holder.style.width = "100%";
+  holder.style.height = "100%";
+  card.insertBefore(holder, $("playOverlay"));
+  aliplayer = new Aliplayer({
+    id: "aliPlayerHolder",
+    width: "100%",
+    height: "100%",
+    autoplay: true,
+    vid,
+    playauth: auth,
+    encryptType: 1,
+    playConfig: { EncryptType: "AliyunVoDEncryption" },
+    keyShortCuts: true,
+  });
+  aliplayer.on("play", () => { hideOverlay(); clearTimeout(playTimer); });
+  aliplayer.on("ended", () => { if (confirm("播放完毕，是否下一集？")) playIndex(currentIndex + 1); });
+  aliplayer.on("error", () => { showOverlay("播放出错", "点击重试"); });
+  watchAutoplay();
+}
+
+// ---------- 课程加载 ----------
+async function loadCourse(courseId) {
+  courseId = Number(courseId);
+  if (!courseId) return;
+  currentCourseId = courseId;
+  $("courseIdInput").value = courseId;
+  $("headerMeta").textContent = "加载中…";
+  $("epList").innerHTML = '<div class="loading">加载课程结构…（首次约 3—5 秒）</div>';
+  $("videoTitle").textContent = "加载中…";
+  try {
+    const { stages } = await fetchCourseStructure(courseId);
+    flatList = flatten(stages);
+    if (!flatList.length) throw new Error("课程没有课时");
+    $("metaCourse").textContent = courseId + " · " + (COURSES.find(c => c.id === courseId)?.name || "自定义课程");
+    const total = flatList.reduce((a, b) => a + (b.duration || 0), 0);
+    $("headerMeta").textContent = `${flatList.length} 课时 · 总时长 ${fmtDur(total)}`;
+    const saved = loadProgress(courseId);
+    renderList();
+    playIndex(saved != null && saved < flatList.length ? saved : 0);
+  } catch (e) {
+    $("epList").innerHTML = '<div class="empty err">加载失败：' + esc(e.message) +
+      '</div><div style="margin-top:10px"><button class="ghost" onclick="loadCourse(currentCourseId)">重试</button></div>';
+    $("headerMeta").textContent = "加载失败";
+    $("videoTitle").textContent = "加载失败";
+  }
+}
+
+// ---------- 导出全部直链 ----------
+async function exportAll() {
+  if (!flatList.length) return;
+  const btn = $("exportBtn");
+  btn.textContent = "解析中…"; btn.disabled = true;
+  const lines = [];
+  let ok = 0, fail = 0;
+  for (let i = 0; i < flatList.length; i++) {
+    const v = flatList[i];
+    try {
+      const d = await api("/video/getPcDetail", { videoId: v.videoId });
+      const info = d.data || {};
+      const mp4 = info.urlHd || info.urlSd || info.urlLd || "";
+      if (mp4) {
+        lines.push(`#${v.no}\t${v.name}\t${mp4}`);
+        ok++;
+      } else {
+        const p = await api("/videoPlus/getPlayInfo", { videoId: v.videoId, channelFlag: 1, resourcesFlag: 1 });
+        if (p.code === 200 && p.data && p.data.id) {
+          lines.push(`#${v.no}\t${v.name}\tVOD\t${p.data.id}`);
+          ok++;
+        } else { lines.push(`#${v.no}\t${v.name}\tNO_SRC`); fail++; }
+      }
+    } catch (e) { lines.push(`#${v.no}\t${v.name}\tERR ${e.message}`); fail++; }
+    if (i % 10 === 0) btn.textContent = `解析中 ${i + 1}/${flatList.length}`;
+  }
+  const header = `# 百通在线课程 ${currentCourseId} 直链清单\n# 生成时间 ${new Date().toLocaleString()}\n# 共 ${flatList.length} 课时，成功 ${ok}，失败 ${fail}\n`;
+  const blob = new Blob([header + lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `baitong_course_${currentCourseId}_links.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  btn.textContent = "导出全部直链"; btn.disabled = false;
+}
+
+// ---------- 事件 ----------
+function init() {
+  const sel = $("courseSelect");
+  COURSES.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.id; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+  const dl = $("courseOptions");
+  COURSES.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.id; o.label = c.name;
+    dl.appendChild(o);
+  });
+
+  const params = new URLSearchParams(location.hash.replace(/^#/, "").split("?")[1] || location.search.slice(1));
+  const initial = params.get("courseId") || params.get("cid") || 88;
+
+  sel.onchange = () => loadCourse(sel.value);
+  $("loadBtn").onclick = () => {
+    const v = $("courseIdInput").value.trim();
+    if (v) { sel.value = v; loadCourse(v); }
+  };
+  $("reloadBtn").onclick = () => loadCourse(currentCourseId || sel.value);
+  $("courseIdInput").onkeydown = e => { if (e.key === "Enter") $("loadBtn").click(); };
+  $("epSearch").oninput = renderList;
+  $("prevBtn").onclick = () => playIndex(currentIndex - 1);
+  $("nextBtn").onclick = () => playIndex(currentIndex + 1);
+  $("playBtn").onclick = () => {
+    if (isPlaying()) {
+      if (aliplayer) aliplayer.pause();
+      if (nativeVideo) nativeVideo.pause();
+      showOverlay("已暂停", "点击继续");
+    } else startPlayback();
+  };
+  $("shuffleBtn").onclick = () => playIndex(Math.floor(Math.random() * flatList.length));
+  $("copyBtn").onclick = async () => {
+    if (!lastDirectUrl) { alert("当前播放源不是 MP4 直链（可能是阿里云 VOD）"); return; }
+    try { await navigator.clipboard.writeText(lastDirectUrl); alert("已复制直链"); }
+    catch (e) { prompt("复制直链：", lastDirectUrl); }
+  };
+  $("handoutBtn").onclick = () => {
+    if (lastHandoutUrl) window.open(lastHandoutUrl, "_blank");
+    else alert("该课时没有讲义");
+  };
+  $("exportBtn").onclick = exportAll;
+
+  sel.value = initial;
+  loadCourse(initial);
+}
+try { init(); } catch (e) {
+  var ph = document.getElementById('playerPlaceholder');
+  if (ph) { ph.style.display = 'flex'; ph.innerHTML = '<span class="err">初始化失败：' + (e && e.message) + '</span>'; }
+}
+</script>
+</body>
+</html>
