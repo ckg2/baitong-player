@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>播放诊断 · 六步自检</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:#f4f5f7;color:#212121;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:17px;margin:0 0 4px}
+  .sub{color:#9499a0;font-size:12px;margin-bottom:14px}
+  .card{background:#fff;border-radius:8px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f2f3}
+  .row:last-child{border-bottom:0}
+  .dot{flex:0 0 22px;height:22px;border-radius:50%;background:#e5e9ef;color:#9499a0;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px}
+  .dot.ok{background:#00b578;color:#fff}
+  .dot.bad{background:#ff4d4f;color:#fff}
+  .dot.run{background:#00a1d6;color:#fff}
+  .body{min-width:0;flex:1}
+  .t{font-weight:600}
+  .d{color:#9499a0;font-size:12px;word-break:break-all;margin-top:2px}
+  .d.err{color:#ff4d4f}
+  button{width:100%;height:44px;border:0;border-radius:6px;background:#00a1d6;color:#fff;
+    font-size:15px;font-weight:600;margin-top:6px}
+  button:disabled{opacity:.6}
+  #summary{background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;font-size:13px}
+  .verdict-ok{border-left:4px solid #00b578}
+  .verdict-bad{border-left:4px solid #ff4d4f}
+  .verdict-run{border-left:4px solid #00a1d6}
+  code{background:#f1f2f3;padding:1px 4px;border-radius:3px;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>播放诊断</h1>
+<div class="sub">在你打不开视频的这台设备上打开本页。六项都通过却仍转圈，就是阿里云加密的问题；某项红叉，就是那一步断了。</div>
+
+<div id="summary" class="verdict-run">等待开始…</div>
+
+<div class="card" id="steps"></div>
+
+<button id="run">开始自检</button>
+
+<div class="card" style="margin-top:12px;font-size:12px;color:#9499a0">
+  说明：本页只做只读探测，不播放、不上传任何东西。结果可直接截图发给帮你处理的人。
+</div>
+
+<script>
+const API = "https://api.zhuokao360.com";
+const VIDEO_ID = 16800;
+
+const STEPS = [
+  { id: "sdk",  t: "① 播放器脚本（阿里云 CDN）", d: "从 g.alicdn.com 加载 AliPlayer" },
+  { id: "api1", t: "② 课程接口", d: "courseStage/findCourseStageYear" },
+  { id: "api2", t: "③ 视频详情接口", d: "video/getPcDetail" },
+  { id: "api3", t: "④ 播放凭证接口", d: "videoPlus/getPlayInfo" },
+  { id: "m3u8", t: "⑤ 视频流索引（m3u8）", d: "video.tibaitong.com" },
+  { id: "ts",   t: "⑥ 视频分片（.ts）", d: "实际画面数据" },
+];
+
+const el = id => document.getElementById(id);
+const stepsBox = el("steps");
+
+function render() {
+  stepsBox.innerHTML = STEPS.map(s => `
+    <div class="row" id="row-${s.id}">
+      <div class="dot" id="dot-${s.id}">·</div>
+      <div class="body">
+        <div class="t">${s.t}</div>
+        <div class="d" id="d-${s.id}">${s.d}</div>
+      </div>
+    </div>`).join("");
+}
+render();
+
+function setStep(id, state, detail) {
+  const dot = el("dot-" + id);
+  const d = el("d-" + id);
+  dot.className = "dot " + (state === "ok" ? "ok" : state === "bad" ? "bad" : "run");
+  dot.textContent = state === "ok" ? "✓" : state === "bad" ? "✕" : "…";
+  d.className = "d" + (state === "bad" ? " err" : "");
+  d.textContent = detail;
+}
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(label + " 超时 " + ms + "ms")), ms)),
+  ]);
+}
+
+async function timed(fn) {
+  const t0 = performance.now();
+  const v = await fn();
+  return { v, ms: Math.round(performance.now() - t0) };
+}
+
+async function run() {
+  el("run").disabled = true;
+  el("summary").className = "verdict-run";
+  el("summary").textContent = "自检进行中…";
+  const results = {};
+
+  // ① SDK
+  setStep("sdk", "run", "加载中…");
+  try {
+    const { ms } = await timed(() => withTimeout(new Promise((res, rej) => {
+      if (typeof Aliplayer === "function") return res(true);
+      const s = document.createElement("script");
+      s.src = "https://g.alicdn.com/de/prismplayer/2.9.12/aliplayer-min.js";
+      s.onload = () => res(true);
+      s.onerror = () => rej(new Error("脚本加载失败（被拦截或 DNS 失败）"));
+      document.head.appendChild(s);
+    }), 20000, "SDK"));
+    results.sdk = true;
+    setStep("sdk", "ok", "已加载，用时 " + ms + "ms");
+  } catch (e) {
+    results.sdk = false;
+    setStep("sdk", "bad", e.message);
+  }
+
+  // ② 课程接口
+  setStep("api1", "run", "请求中…");
+  try {
+    const { v, ms } = await timed(() => withTimeout(
+      fetch(API + "/courseStage/findCourseStageYear?courseId=88", { headers: { "APP-TYPE": "2" } })
+        .then(r => r.json()), 20000, "课程接口"));
+    const n = (v.data && v.data[0] && v.data[0].courseStageInfoRes || []).length;
+    results.api1 = v.code === 200 && n > 0;
+    setStep("api1", results.api1 ? "ok" : "bad",
+      results.api1 ? `code=200，${n} 个章节，${ms}ms` : `code=${v.code} msg=${v.msg}，${ms}ms`);
+  } catch (e) {
+    results.api1 = false;
+    setStep("api1", "bad", e.message);
+  }
+
+  // ③ 视频详情
+  let playauth = null, aliyunVid = null;
+  setStep("api2", "run", "请求中…");
+  try {
+    const { v, ms } = await timed(() => withTimeout(
+      fetch(API + "/video/getPcDetail?videoId=" + VIDEO_ID, { headers: { "APP-TYPE": "2" } })
+        .then(r => r.json()), 20000, "详情接口"));
+    const d = v.data || {};
+    aliyunVid = d.aliyunVid || null;
+    results.api2 = v.code === 200 && !!d.videoId;
+    setStep("api2", results.api2 ? "ok" : "bad",
+      results.api2 ? `code=200，${d.name || ""}，${ms}ms` : `code=${v.code} msg=${v.msg}`);
+  } catch (e) {
+    results.api2 = false;
+    setStep("api2", "bad", e.message);
+  }
+
+  // ④ 播放凭证
+  setStep("api3", "run", "请求中…");
+  try {
+    const { v, ms } = await timed(() => withTimeout(
+      fetch(API + "/videoPlus/getPlayInfo?videoId=" + VIDEO_ID + "&channelFlag=1&resourcesFlag=1",
+        { headers: { "APP-TYPE": "2" } }).then(r => r.json()), 25000, "凭证接口"));
+    const d = v.data || {};
+    playauth = d.auth || null;
+    results.api3 = v.code === 200 && !!d.auth;
+    setStep("api3", results.api3 ? "ok" : "bad",
+      results.api3 ? `code=200，凭证 ${d.auth.length} 字符，${ms}ms` : `code=${v.code} msg=${v.msg}`);
+  } catch (e) {
+    results.api3 = false;
+    setStep("api3", "bad", e.message);
+  }
+
+  // ⑤ 取 m3u8 地址并请求
+  let m3u8 = null;
+  setStep("m3u8", "run", "解析播放地址…");
+  try {
+    if (!aliyunVid || !playauth) throw new Error("缺少 vid 或凭证，跳过");
+    const params = new URLSearchParams({
+      Action: "GetPlayInfo", VideoId: aliyunVid, Formats: "", AuthTimeout: "7200",
+      Channel: "HTML5", PlayerVersion: "2.9.12", Version: "2017-03-21",
+      Format: "JSON", StreamType: "video", SignatureMethod: "HMAC-SHA1",
+      SignatureVersion: "1.0", SignatureNonce: Math.random().toString(36).slice(2),
+    });
+    const r = await withTimeout(
+      fetch("https://vod.cn-shanghai.aliyuncs.com/?" + params.toString(), {
+        headers: { "x-sdk-client": "h5" },
+      }), 20000, "阿里云 GetPlayInfo");
+    const j = await r.json();
+    const list = (j.PlayInfoList && j.PlayInfoList.PlayInfo) || [];
+    if (!list.length) throw new Error("未返回播放地址（可能需要阿里云签名，属正常）");
+    m3u8 = list[0].PlayURL;
+    const t0 = performance.now();
+    const mr = await withTimeout(fetch(m3u8), 20000, "m3u8");
+    const txt = await mr.text();
+    const ms = Math.round(performance.now() - t0);
+    const segs = (txt.match(/\.ts/g) || []).length;
+    results.m3u8 = mr.ok && segs > 0;
+    setStep("m3u8", results.m3u8 ? "ok" : "bad",
+      results.m3u8 ? `HTTP ${mr.status}，${segs} 个分片，${ms}ms` : `HTTP ${mr.status}`);
+  } catch (e) {
+    results.m3u8 = null;
+    setStep("m3u8", "bad", e.message + "（此项失败不一定致命）");
+  }
+
+  // ⑥ 取一个 .ts 分片
+  setStep("ts", "run", "检测分片…");
+  try {
+    if (!m3u8) throw new Error("上一步没拿到 m3u8，跳过");
+    const txt = await (await fetch(m3u8)).text();
+    const m = txt.match(/([^\s#]+\.ts)/);
+    if (!m) throw new Error("m3u8 里没有 .ts 行");
+    const tsUrl = new URL(m[1], m3u8).href;
+    const t0 = performance.now();
+    const tr = await withTimeout(fetch(tsUrl, { headers: { Range: "bytes=0-65535" } }), 25000, ".ts");
+    const ms = Math.round(performance.now() - t0);
+    const buf = await tr.arrayBuffer();
+    results.ts = tr.ok && buf.byteLength > 1000;
+    setStep("ts", results.ts ? "ok" : "bad",
+      results.ts ? `HTTP ${tr.status}，${(buf.byteLength/1024).toFixed(1)} KB，${ms}ms` : `HTTP ${tr.status}`);
+  } catch (e) {
+    results.ts = false;
+    setStep("ts", "bad", e.message);
+  }
+
+  // 汇总
+  const okCount = Object.values(results).filter(v => v === true).length;
+  const badList = STEPS.filter(s => results[s.id] === false).map(s => s.t);
+  const sum = el("summary");
+  if (badList.length === 0) {
+    sum.className = "verdict-ok";
+    sum.innerHTML = "<b>六项全部通过。</b><br>说明网络、接口、视频源都正常。<br>" +
+      "如果此时播放器仍转圈，那就是 <b>阿里云私有加密在你这台设备的浏览器上不被支持</b>" +
+      "（iOS &lt; 17.1 的 Safari 已知不支持）。<br>建议：改用电脑看，或升级系统。";
+  } else {
+    sum.className = "verdict-bad";
+    sum.innerHTML = "<b>有 " + badList.length + " 项失败：</b><br>" + badList.join("、") +
+      "<br><br>这一项就是断点。把本页截图发给帮你处理的人，即可定位。";
+  }
+  el("run").disabled = false;
+  el("run").textContent = "重新自检";
+}
+
+el("run").onclick = run;
+</script>
+</body>
+</html>
