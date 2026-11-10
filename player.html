@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300a1d6'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif'>百</text></svg>">
 <title>百通在线 · 课程播放器</title>
-<link rel="stylesheet" href="https://g.alicdn.com/de/prismplayer/2.9.12/skins/default/aliplayer-min.css" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://g.alicdn.com/de/prismplayer/2.16.0/skins/default/aliplayer-min.css" media="print" onload="this.media='all'">
 <style>
   :root{
     --blue:#00a1d6; --pink:#fb7299; --bg:#f4f5f7; --card:#fff;
@@ -145,7 +145,7 @@
 // Aliplayer loads asynchronously (avoids blocking first paint on slow CDN)
 window.__aliplayerReady = new Promise(function (resolve) {
   var s = document.createElement('script');
-  s.src = 'https://g.alicdn.com/de/prismplayer/2.9.12/aliplayer-min.js';
+  s.src = 'https://g.alicdn.com/de/prismplayer/2.16.0/aliplayer-min.js';
   s.async = true;
   s.onload = function () { resolve(true); };
   s.onerror = function () { resolve(false); };
@@ -409,7 +409,15 @@ async function playVod(vid, auth, v) {
     playauth: auth,
     encryptType: 1,
     playConfig: { EncryptType: "AliyunVoDEncryption" },
+    // 移动端强制走 MSE 软解，否则加密流解不了
+    enableMSEForAndroid: true,
+    useHlsPluginForSafari: true,
+    enableWorker: true,
+    isLive: false,
     keyShortCuts: true,
+    playsinline: true,
+    x5_type: "h5",
+    x5_fullscreen: false,
   });
   aliplayer.on("play", () => { hideOverlay(); clearTimeout(playTimer); });
   aliplayer.on("ended", () => { if (confirm("播放完毕，是否下一集？")) playIndex(currentIndex + 1); });
