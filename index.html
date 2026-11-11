@@ -4,13 +4,124 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>百通在线 · 课程播放器</title>
-<meta http-equiv="refresh" content="0; url=./player.html">
 <style>
-  html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;
-    background:#f4f5f7;color:#9499a0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#f4f5f7;color:#212121;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:520px;margin:0 auto;padding:28px 20px}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:#9499a0;font-size:13px;margin-bottom:22px;line-height:1.6}
+  .card{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .card.ok{border-left:4px solid #00b578}
+  .card.bad{border-left:4px solid #ff4d4f}
+  .card.run{border-left:4px solid #00a1d6}
+  .t{font-weight:600;font-size:14px}
+  .d{color:#9499a0;font-size:12px;margin-top:4px;word-break:break-all;line-height:1.5}
+  .d.err{color:#ff4d4f}
+  button{width:100%;height:46px;border:0;border-radius:8px;background:#00a1d6;color:#fff;
+    font-size:15px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.55}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #f0f0f0;font-size:13px}
+  .kv:last-child{border:0}
+  .kv span:first-child{color:#9499a0}
+  code{background:#f1f2f3;padding:1px 5px;border-radius:3px;font-size:12px}
+  .hint{color:#9499a0;font-size:12px;line-height:1.6;margin-top:18px}
 </style>
 </head>
 <body>
-<div>正在跳转到播放器…<br><a href="./player.html" style="color:#00a1d6">点这里手动进入</a></div>
+<div class="wrap">
+  <h1>播放页打开失败 · 自检</h1>
+  <div class="sub">这个页面用来判断问题到底出在哪一层。点下面的按钮，10 秒出结果。</div>
+
+  <div class="card run" id="s1"><div class="t">① 当前设备 / 网络</div><div class="d" id="d1">检测中…</div></div>
+  <div class="card run" id="s2"><div class="t">② GitHub Pages（网页托管）</div><div class="d" id="d2">等待</div></div>
+  <div class="card run" id="s3"><div class="t">③ 百通课程接口</div><div class="d" id="d3">等待</div></div>
+  <div class="card run" id="s4"><div class="t">④ 阿里云播放器 CDN</div><div class="d" id="d4">等待</div></div>
+  <div class="card run" id="s5"><div class="t">⑤ 视频流服务器</div><div class="d" id="d5">等待</div></div>
+
+  <button id="go">开始自检</button>
+
+  <div class="hint">
+    结果说明：<br>
+    · ② 失败 = 你的网络访问 github.io 被拦，需要换地址<br>
+    · ② 正常但播放转圈 = 播放器或加密问题<br>
+    · ③④⑤ 失败 = 对应服务器不可达<br><br>
+    把结果截图发给帮你处理的人即可。
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function set(id, ok, detail) {
+  const box = $("s" + id), d = $("d" + id);
+  box.className = "card " + (ok === true ? "ok" : ok === false ? "bad" : "run");
+  d.className = "d" + (ok === false ? " err" : "");
+  d.textContent = detail;
+}
+function t(fn, ms, label) {
+  return Promise.race([
+    fn(),
+    new Promise((_, rj) => setTimeout(() => rj(new Error(label + " 超时")), ms)),
+  ]);
+}
+async function probe(url, ms) {
+  const t0 = performance.now();
+  const r = await t(() => fetch(url, { cache: "no-store" }), ms, "请求");
+  const ms2 = Math.round(performance.now() - t0);
+  return { status: r.status, ok: r.ok, ms: ms2, len: (await r.text()).length };
+}
+
+async function run() {
+  $("go").disabled = true;
+  $("go").textContent = "自检中…";
+
+  // ① 设备
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const online = navigator.onLine;
+  $("s1").className = "card " + (online ? "ok" : "bad");
+  $("d1").innerHTML =
+    (isIOS ? "iOS / Safari" : isAndroid ? "安卓 / Chrome" : "电脑浏览器") +
+    " · " + (online ? "网络已连接" : "网络已断开") +
+    " · 屏幕 " + window.screen.width + "×" + window.screen.height;
+
+  // ② GitHub Pages
+  try {
+    const r = await probe(location.href.split("?")[0], 12000);
+    set(2, r.ok, "HTTP " + r.status + " · " + r.ms + "ms · " + r.len + " 字节 —— 访问正常");
+  } catch (e) {
+    set(2, false, "访问失败：" + e.message + "（你的网络可能拦截了 github.io）");
+  }
+
+  // ③ 百通接口
+  try {
+    const r = await probe("https://api.zhuokao360.com/courseStage/findCourseStageYear?courseId=88", 15000);
+    set(3, r.ok, "HTTP " + r.status + " · " + r.ms + "ms");
+  } catch (e) {
+    set(3, false, "失败：" + e.message);
+  }
+
+  // ④ 播放器 CDN
+  try {
+    const r = await probe("https://g.alicdn.com/de/prismplayer/2.16.0/aliplayer-min.js", 15000);
+    set(4, r.ok, "HTTP " + r.status + " · " + r.ms + "ms · " + Math.round(r.len / 1024) + " KB");
+  } catch (e) {
+    set(4, false, "失败：" + e.message + "（阿里云 CDN 不可达）");
+  }
+
+  // ⑤ 视频服务器
+  try {
+    const r = await probe("https://video.tibaitong.com/", 12000);
+    set(5, r.status < 500, "HTTP " + r.status + " · " + r.ms + "ms");
+  } catch (e) {
+    set(5, false, "失败：" + e.message);
+  }
+
+  $("go").disabled = false;
+  $("go").textContent = "重新自检";
+}
+$("go").onclick = run;
+</script>
 </body>
 </html>
