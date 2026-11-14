@@ -112,6 +112,8 @@
         <div class="sub" id="overlaySub">浏览器可能拦截了自动播放</div>
       </div>
     </div>
+    <div id="btTip" style="display:none;background:#fff7e6;border:1px solid #ffd591;color:#d46b08;
+      border-radius:6px;padding:10px 14px;margin-top:10px;font-size:13px;line-height:1.6"></div>
     <div class="info-card">
       <h1 id="videoTitle">未选择视频</h1>
       <div class="row">
@@ -156,15 +158,30 @@ const API = "https://api.zhuokao360.com";
 const HDR = { "APP-TYPE": "2" };
 const LS_KEY = "bt_player_progress_v1";
 
+// playable: "full" = 手机能播（明文 MP4）; "none" = 阿里云私有加密，手机浏览器播不了
 const COURSES = [
-  { id: 88,  name: "军队文职 · 公共科目（通识+岗位能力）" },
-  { id: 568, name: "军队文职 · 公共科目（导学+基础+岗位）" },
-  { id: 144, name: "军队文职 · 行测+政治理论" },
-  { id: 145, name: "军队文职 · 申论" },
-  { id: 76,  name: "军队文职 · 综合知识（公基）" },
-  { id: 74,  name: "军队文职 · 行测（言语/数量/判断/资料/常识）" },
-  { id: 514, name: "百通试听课" },
+  { id: 69,  name: "军队文职 · 公共科目（基础+岗位）", playable: "full" },
+  { id: 71,  name: "军队文职 · 行测五科", playable: "full" },
+  { id: 72,  name: "军队文职 · 言语理解", playable: "full" },
+  { id: 76,  name: "军队文职 · 综合知识（公基）", playable: "part" },
+  { id: 514, name: "百通试听课", playable: "full" },
+  { id: 88,  name: "军队文职 · 公共科目（原版）", playable: "none" },
+  { id: 568, name: "军队文职 · 公共科目 V2", playable: "none" },
+  { id: 144, name: "军队文职 · 行测+政治理论", playable: "none" },
+  { id: 145, name: "军队文职 · 申论", playable: "none" },
+  { id: 74,  name: "军队文职 · 行测（旧）", playable: "part" },
 ];
+
+function showTip(msg) {
+  const el = document.getElementById("btTip");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = "block";
+}
+function hideTip() {
+  const el = document.getElementById("btTip");
+  if (el) el.style.display = "none";
+}
 
 const $ = id => document.getElementById(id);
 let courseCache = {};
@@ -382,6 +399,14 @@ function playMp4(url, v) {
   nativeVideo = vid;
   vid.onplay = () => { nativeVideo.muted = false; hideOverlay(); };
   vid.onended = () => { if (confirm("播放完毕，是否下一集？")) playIndex(currentIndex + 1); };
+  // 解码失败（Format error / 4）→ 明确提示，不再傻转圈
+  vid.onerror = () => {
+    const code = vid.error ? vid.error.code : 0;
+    const msg = code === 4
+      ? "这个视频的编码当前设备解不了（MEDIA_ERR_SRC_NOT_SUPPORTED）。换一门课试试。"
+      : "视频加载失败（错误码 " + code + "）。可能是网络或文件不存在。";
+    showOverlay("播放出错", msg);
+  };
   vid.play().catch(() => { showOverlay("点击播放", v.name); });
   watchAutoplay();
 }
@@ -438,7 +463,13 @@ async function loadCourse(courseId) {
     const { stages } = await fetchCourseStructure(courseId);
     flatList = flatten(stages);
     if (!flatList.length) throw new Error("课程没有课时");
-    $("metaCourse").textContent = courseId + " · " + (COURSES.find(c => c.id === courseId)?.name || "自定义课程");
+    const meta = COURSES.find(c => c.id === courseId);
+    $("metaCourse").textContent = courseId + " · " + (meta?.name || "自定义课程");
+    if (meta && meta.playable === "none") {
+      showTip("⚠️ 这门课是阿里云私有加密，手机浏览器无法播放。建议改用「公共科目（基础+岗位）」或「行测五科」。");
+    } else {
+      hideTip();
+    }
     const total = flatList.reduce((a, b) => a + (b.duration || 0), 0);
     $("headerMeta").textContent = `${flatList.length} 课时 · 总时长 ${fmtDur(total)}`;
     const saved = loadProgress(courseId);
@@ -493,7 +524,11 @@ function init() {
   const sel = $("courseSelect");
   COURSES.forEach(c => {
     const o = document.createElement("option");
-    o.value = c.id; o.textContent = c.name;
+    o.value = c.id;
+    const flag = c.playable === "full" ? " ✅可播"
+               : c.playable === "part" ? " ⚠️部分"
+               : " ❌手机不可播";
+    o.textContent = c.name + flag;
     sel.appendChild(o);
   });
   const dl = $("courseOptions");
@@ -504,7 +539,7 @@ function init() {
   });
 
   const params = new URLSearchParams(location.hash.replace(/^#/, "").split("?")[1] || location.search.slice(1));
-  const initial = params.get("courseId") || params.get("cid") || 88;
+  const initial = params.get("courseId") || params.get("cid") || 69;
 
   sel.onchange = () => loadCourse(sel.value);
   $("loadBtn").onclick = () => {
